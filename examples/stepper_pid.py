@@ -31,7 +31,7 @@ def main():
     print(f"Running simulation for {target_steps} steps")
     sim = Simulator(gains, plant, profile)
 
-    df = sim.run(start=0.0, end=target_steps * RADIANS_PER_STEP, dt=0.001)
+    df = sim.run(start=0.0, end=target_steps * RADIANS_PER_STEP, dt=0.0001)
 
     print("Converting radians to steps for plotting")
     df["setpoint"] = df["setpoint"] / RADIANS_PER_STEP
