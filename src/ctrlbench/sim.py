@@ -1,3 +1,4 @@
+from typing import Callable
 from dataclasses import dataclass, field
 import pandas as pd
 from enum import Enum
@@ -15,6 +16,15 @@ class ProfileConfig:
     max_velocity: float = 0.0
     acceleration: float = 0.0
     deceleration: float = 0.0
+
+    @classmethod
+    def step(cls) -> "ProfileConfig":
+        """Instantaneous jump to target position. Used for tuning step response."""
+        return cls(
+            max_velocity=float("inf"),
+            acceleration=float("inf"),
+            deceleration=float("inf"),
+        )
 
 
 @dataclass
@@ -66,8 +76,12 @@ class Simulator:
 
         current_time = 0.0
         settling_time_remaining = 1.0  # Extra time to run after reaching target
+        max_time = dt * 10000  # Safety limit to prevent infinite loops
 
         while not pg.is_finished() or settling_time_remaining > 0:
+            if current_time > max_time:
+                break
+
             pg.calculate_next_step(dt)
             setpoint = pg.position
             actual = pm.position
@@ -98,6 +112,59 @@ class Simulator:
         )
 
         return df
+
+    def run_signal(
+        self, signal_func: Callable[[float], float], duration: float, dt: float = 0.001
+    ) -> pd.DataFrame:
+        """
+        Runs the PID controller against a continuous mathematical signal (like a square wave).
+
+        Args:
+            signal_func: A function that takes current time (float) and returns the desired setpoint (float).
+            duration: How long to run the simulation in seconds.
+            dt: Time step.
+        """
+        pm = PlantModel(config=self.plant)
+        pid = PidController(self.gains)
+
+        time_data, setpoint_data, actual_data, error_data, output_data = (
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
+        current_time = 0.0
+
+        while current_time <= duration:
+            # 1. Ask the custom function for the ideal setpoint at this exact millisecond
+            setpoint = signal_func(current_time)
+
+            actual = pm.position
+            error = setpoint - actual
+
+            # 2. Update PID and Plant
+            torque_command = pid.update(error, dt)
+            pm.step(command=torque_command, dt=dt)
+
+            # 3. Log Data
+            time_data.append(current_time)
+            setpoint_data.append(setpoint)
+            actual_data.append(actual)
+            error_data.append(error)
+            output_data.append(torque_command)
+
+            current_time += dt
+
+        return pd.DataFrame(
+            {
+                "time": time_data,
+                "setpoint": setpoint_data,
+                "actual": actual_data,
+                "error": error_data,
+                "output": output_data,
+            }
+        )
 
 
 @dataclass

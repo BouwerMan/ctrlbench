@@ -5,10 +5,10 @@ description = "Python toolkit for simulating, capturing, and analyzing PID contr
 readme = "README.md"
 authors = [{ name = "Dylan Parks", email = "dylan@bouwerbytes.com" }]
 requires-python = ">=3.14"
-dependencies = [
-    "matplotlib>=3.10.8",
-    "pandas>=3.0.1",
-]
+dependencies = ["pandas>=2.0.0,<3.0.0", "matplotlib>=3.7.0"]
+
+[project.optional-dependencies]
+gui = ["streamlit>=1.30.0", "plotly>=5.0.0"]
 
 [build-system]
 requires = ["uv_build>=0.10.8,<0.11.0"]

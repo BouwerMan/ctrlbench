@@ -38,7 +38,8 @@ def main():
     df["actual"] = df["actual"] / RADIANS_PER_STEP
     df["error"] = df["error"] / RADIANS_PER_STEP
 
-    plot_basic_dashboard(df)
+    fig = plot_basic_dashboard(df)
+    fig.show()
 
 
 if __name__ == "__main__":
