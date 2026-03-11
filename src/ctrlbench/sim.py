@@ -56,7 +56,13 @@ class Simulator:
 
         pid = PidController(self.gains)
 
-        time_data, setpoint_data, actual_data, output_data = [], [], [], []
+        time_data, setpoint_data, actual_data, error_data, output_data = (
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
 
         current_time = 0.0
         settling_time_remaining = 1.0  # Extra time to run after reaching target
@@ -74,6 +80,7 @@ class Simulator:
             time_data.append(current_time)
             setpoint_data.append(setpoint)
             actual_data.append(actual)
+            error_data.append(error)
             output_data.append(torque_command)
 
             current_time += dt
@@ -85,6 +92,7 @@ class Simulator:
                 "time": time_data,
                 "setpoint": setpoint_data,
                 "actual": actual_data,
+                "error": error_data,
                 "output": output_data,
             }
         )
@@ -178,6 +186,21 @@ class PlantConfig:
             electrical_tau=electrical_tau,
             viscous_friction=0.01,  # Small default drag
             static_friction=0.0,
+            disturbance=0.0,
+        )
+
+    @classmethod
+    def xy42sth34(cls) -> "PlantConfig":
+        """
+        Physical model for the XY42STH34-0354A NEMA 17 Stepper Motor.
+        Units are standard SI (kg*m^2, Nm, Seconds).
+        """
+        return cls(
+            rotor_inertia=3.5e-6,  # 35 g-cm^2
+            peak_torque=0.157,  # 1.6 kg-cm Holding Torque
+            electrical_tau=0.00097,  # 33mH / 34 Ohms
+            static_friction=0.0118,  # 120 g-cm Detent Torque
+            viscous_friction=0.001,  # Estimated base drag
             disturbance=0.0,
         )
 
