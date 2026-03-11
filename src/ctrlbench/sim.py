@@ -59,15 +59,27 @@ class Simulator:
         current_time = 0.0
         settling_time_remaining = 1.0  # Extra time to run after reaching target
 
-        while pg.is_finished() is False:
-            current_time += dt
+        while not pg.is_finished() or settling_time_remaining > 0:
             pg.calculate_next_step(dt)
-            # PlantModel current pos
-            # Calc error
-            # Call PidController to get command
-            pm.step(command=0.0, dt=dt)
+            setpoint = pg.position
+            actual = pm.position
 
-        return SimResult()
+            error = setpoint - actual
+
+            torque_command = pid.update(error, dt)
+            pm.step(command=torque_command, dt=dt)
+
+            result.time.append(current_time)
+            result.setpoint.append(setpoint)
+            result.actual.append(actual)
+            result.error.append(error)
+            result.output.append(torque_command)
+
+            current_time += dt
+            if pg.is_finished():
+                settling_time_remaining -= dt
+
+        return result
 
 
 @dataclass
@@ -97,7 +109,7 @@ class PidController:
         self.error = 0.0
         self.integral = 0.0
 
-    def calculate(self, error: float, dt: float) -> float:
+    def update(self, error: float, dt: float) -> float:
         if self.first_run:
             self.error_prev = error
             self.first_run = False
