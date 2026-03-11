@@ -3,15 +3,6 @@ from enum import Enum
 from math import exp
 
 
-@dataclass
-class PidGains:
-    kp: float = 0.0
-    ki: float = 0.0
-    kd: float = 0.0
-    integral_limit_max: float = 1000.0
-    integral_limit_min: float = 1000.0
-
-
 # @dataclass
 # class PlantConfig:
 #     response: float = 1.0  # How well the plant tracks commands (0.0–1.0)
@@ -57,7 +48,35 @@ class Simulator:
             SimResult containing all recorded signals.
         """
         print(f"Hello from Simulator! Moving from {start} to {end}.")
+        pg = ProfileGenerator(profile=self.profile)
+        pg.move(start, end)
+
+        pm = PlantModel(config=self.plant)
+
+        pid = PidController(self.gains)
+        result = SimResult()
+
+        current_time = 0.0
+        settling_time_remaining = 1.0  # Extra time to run after reaching target
+
+        while pg.is_finished() is False:
+            current_time += dt
+            pg.calculate_next_step(dt)
+            # PlantModel current pos
+            # Calc error
+            # Call PidController to get command
+            pm.step(command=0.0, dt=dt)
+
         return SimResult()
+
+
+@dataclass
+class PidGains:
+    kp: float = 0.0
+    ki: float = 0.0
+    kd: float = 0.0
+    integral_limit_max: float = 1000.0
+    integral_limit_min: float = -1000.0
 
 
 class PidController:
@@ -65,7 +84,44 @@ class PidController:
     Owns error/integral/derivative math
     """
 
-    pass
+    def __init__(self, gains: PidGains):
+        self.gains = gains
+        self.first_run = True
+        self.error_prev = 0.0
+        self.error = 0.0
+        self.integral = 0.0
+
+    def reset(self):
+        self.first_run = True
+        self.error_prev = 0.0
+        self.error = 0.0
+        self.integral = 0.0
+
+    def calculate(self, error: float, dt: float) -> float:
+        if self.first_run:
+            self.error_prev = error
+            self.first_run = False
+
+        self.integral += error * dt
+
+        # Clamp integral to prevent windup
+        self.integral = max(
+            self.gains.integral_limit_min,
+            min(self.gains.integral_limit_max, self.integral),
+        )
+
+        if dt > 0.0:
+            derivative = (error - self.error_prev) / dt
+        else:
+            derivative = 0.0
+
+        self.error_prev = error
+
+        return (
+            (self.gains.kp * error)
+            + (self.gains.ki * self.integral)
+            + (self.gains.kd * derivative)
+        )
 
 
 @dataclass
