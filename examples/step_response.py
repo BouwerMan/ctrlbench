@@ -9,8 +9,6 @@ def main():
 
     plant = PlantConfig.simple(inertia=1.0)
 
-    profile = ProfileConfig.step()
-
     gains = PidGains(
         kp=20.0,  # High proportional gain acts like a very stiff spring
         ki=0.0,  # No integral needed since there is no static friction
@@ -18,7 +16,7 @@ def main():
     )
 
     # TODO: Allow profile to be None
-    sim = Simulator(gains=gains, plant=plant, profile=profile)
+    sim = Simulator(gains=gains, plant=plant, profile=None)
 
     def square_wave(t: float) -> float:
         return 1.0 if (t % 2.0) < 1.0 else 0.0

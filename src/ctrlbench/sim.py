@@ -42,12 +42,16 @@ class Simulator:
     Runs a PID controller against a simulated plant and returns time-series data.
     """
 
-    def __init__(self, gains: PidGains, plant: PlantConfig, profile: ProfileConfig):
+    def __init__(
+        self, gains: PidGains, plant: PlantConfig, profile: ProfileConfig | None = None
+    ):
         self.gains = gains
         self.plant = plant
         self.profile = profile
 
-    def run(self, start: float, end: float, dt: float = 0.001) -> pd.DataFrame:
+    def run(
+        self, start: float, end: float, dt: float = 0.001, max_time: float = 10.0
+    ) -> pd.DataFrame:
         """
         Simulate a move from start to end position.
 
@@ -58,7 +62,13 @@ class Simulator:
         Returns:
             SimResult containing all recorded signals.
         """
+        if self.profile is None:
+            raise ValueError(
+                "A ProfileConfig is required to use .run(). Use .run_signal() for raw mathematical signals."
+            )
+
         print(f"Hello from Simulator! Moving from {start} to {end}.")
+
         pg = ProfileGenerator(profile=self.profile)
         pg.move(start, end)
 
@@ -76,7 +86,6 @@ class Simulator:
 
         current_time = 0.0
         settling_time_remaining = 1.0  # Extra time to run after reaching target
-        max_time = dt * 10000  # Safety limit to prevent infinite loops
 
         while not pg.is_finished() or settling_time_remaining > 0:
             if current_time > max_time:

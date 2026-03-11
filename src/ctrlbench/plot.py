@@ -38,7 +38,7 @@ def plot_basic_dashboard(df: pd.DataFrame):
     return fig
 
 
-def plot_interactive_dashboard(df: pd.DataFrame):
+def plot_interactive_dashboard(df: pd.DataFrame, x_min=None, x_max=None):
     # Create 3 stacked subplots sharing the X-axis
     fig = make_subplots(
         rows=3,
@@ -86,7 +86,12 @@ def plot_interactive_dashboard(df: pd.DataFrame):
     )
     # Add a zero-line for reference
     fig.add_hline(
-        y=0, line_width=1, line_dash="solid", line_color=color_text, row=2, col=1
+        y=0,
+        line_width=1,
+        line_dash="solid",
+        line_color=color_text,
+        row=2,  # pyright: ignore[reportArgumentType]
+        col=1,  # pyright: ignore[reportArgumentType]
     )
 
     # --- Bottom Plot: Output ---
@@ -118,5 +123,8 @@ def plot_interactive_dashboard(df: pd.DataFrame):
     fig.update_yaxes(title_text="Position", row=1, col=1)
     fig.update_yaxes(title_text="Error", row=2, col=1)
     fig.update_yaxes(title_text="Command", row=3, col=1)
+
+    if x_min is not None and x_max is not None:
+        fig.update_xaxes(range=[x_min, x_max])
 
     return fig

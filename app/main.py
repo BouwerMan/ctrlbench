@@ -8,16 +8,105 @@ RADIANS_PER_STEP = math.radians(STEP_ANGLE_DEG)
 
 st.set_page_config(page_title="PID Tuner", layout="wide")
 
+
+def synced_slider_input(
+    label: str,
+    key_prefix: str,
+    min_val: float,
+    max_val: float,
+    default_val: float,
+    step: float = 1.0,
+    format_str: str = "%g",
+    container=None,  # Pass st.sidebar, or leave None for main area
+    col_ratio: tuple = (3, 1),
+):
+    """Creates a linked slider and number input that stay perfectly in sync."""
+    master_key = f"{key_prefix}_master"
+    slider_key = f"{key_prefix}_slider"
+    number_key = f"{key_prefix}_number"
+
+    # Initialize all three keys once
+    if master_key not in st.session_state:
+        st.session_state[master_key] = float(default_val)
+        st.session_state[slider_key] = float(default_val)
+        st.session_state[number_key] = float(default_val)
+
+    def update_from_slider():
+        st.session_state[master_key] = st.session_state[slider_key]
+        st.session_state[number_key] = st.session_state[slider_key]
+
+    def update_from_number():
+        st.session_state[master_key] = st.session_state[number_key]
+        st.session_state[slider_key] = st.session_state[number_key]
+
+    ctx = container if container is not None else st
+    ctx.markdown(f"**{label}**")
+    col1, col2 = ctx.columns(list(col_ratio))
+
+    with col1:
+        st.slider(
+            label,
+            min_value=float(min_val),
+            max_value=float(max_val),
+            step=float(step),
+            format=format_str,
+            key=slider_key,  # ← no value= here
+            on_change=update_from_slider,
+            label_visibility="collapsed",
+        )
+    with col2:
+        st.number_input(
+            label,
+            min_value=float(min_val),
+            max_value=float(max_val),
+            step=float(step),
+            format=format_str,
+            key=number_key,  # ← no value= here
+            on_change=update_from_number,
+            label_visibility="collapsed",
+        )
+
+    return st.session_state[master_key]
+
+
 st.sidebar.header("PID Gains")
 
-kp = st.sidebar.slider(
-    "Kp (Proportional)", min_value=0.0, max_value=2.0, value=0.5, format="%.5f"
+with st.sidebar.expander("Configure Slider Limits"):
+    kp_max = st.number_input("Max Kp Limit", min_value=0.01, value=2.0, step=1.0)
+    ki_max = st.number_input("Max Ki Limit", min_value=0.01, value=0.5, step=0.1)
+    kd_max = st.number_input("Max Kd Limit", min_value=0.001, value=0.1, step=0.01)
+
+kp = synced_slider_input(
+    "Kp (Proportional)",
+    "kp",
+    min_val=0.0,
+    max_val=kp_max,
+    default_val=0.5,
+    step=kp_max / 200.0,  # Auto-scales resolution so the slider is always smooth
+    format_str="%.4f",
+    container=st.sidebar,
 )
-ki = st.sidebar.slider(
-    "Ki (Integral)", min_value=0.0, max_value=0.5, value=0.05, format="%.5f"
+
+ki = synced_slider_input(
+    "Ki (Integral)",
+    "ki",
+    min_val=0.0,
+    max_val=ki_max,
+    default_val=0.05,
+    step=ki_max / 200.0,
+    format_str="%.4f",
+    container=st.sidebar,
 )
-kd = st.sidebar.slider(
-    "Kd (Derivative)", min_value=0.0, max_value=0.1, value=0.01, format="%.5f"
+
+kd = synced_slider_input(
+    "Kd (Derivative)",
+    "kd",
+    min_val=0.0,
+    max_val=kd_max,
+    default_val=0.01,
+    step=kd_max / 200.0,
+    format_str="%.5f",
+    container=st.sidebar,
 )
 
 st.sidebar.markdown("---")
@@ -25,10 +114,6 @@ st.sidebar.header("Simulation Settings")
 
 profile_type = st.sidebar.selectbox(
     "Profile Type", options=["Trapezoidal", "Step Response"]
-)
-
-target_steps = st.sidebar.slider(
-    "Target Steps", min_value=100, max_value=50000, value=10000, step=100
 )
 
 dt = st.sidebar.number_input(
@@ -43,26 +128,58 @@ dt = st.sidebar.number_input(
 gains = PidGains(kp=kp, ki=ki, kd=kd)
 plant = PlantConfig.xy42sth34()
 
-
 if profile_type == "Trapezoidal":
-    max_vel_rad = 2000 * RADIANS_PER_STEP
-    accel_rad = 5000 * RADIANS_PER_STEP
+    target_steps = st.sidebar.slider(
+        "Target Steps", min_value=100, max_value=50000, value=10000, step=100
+    )
+    vel_steps = st.sidebar.number_input("Cruise Velocity (Steps/s)", value=2000)
+    accel_steps = st.sidebar.number_input("Acceleration (Steps/s^2)", value=5000)
+    max_time = st.sidebar.number_input("Max Sim Time (s)", value=10.0, step=1.0)
+
+    max_vel_rad = vel_steps * RADIANS_PER_STEP
+    accel_rad = accel_steps * RADIANS_PER_STEP
     profile = ProfileConfig(
         max_velocity=max_vel_rad, acceleration=accel_rad, deceleration=accel_rad
     )
-else:
-    profile = ProfileConfig.step()
 
-sim = Simulator(gains=gains, plant=plant, profile=profile)
+    sim = Simulator(gains=gains, plant=plant, profile=profile)
+    df = sim.run(
+        start=0.0, end=target_steps * RADIANS_PER_STEP, dt=dt, max_time=max_time
+    )
 
-if profile_type == "Trapezoidal":
-    df = sim.run(start=0.0, end=target_steps * RADIANS_PER_STEP, dt=dt)
 else:
+    step_amplitude = st.sidebar.number_input(
+        "Step Amplitude (Steps)", min_value=1, value=10
+    )
+    wave_period = st.sidebar.number_input(
+        "Wave Period (s)", min_value=0.1, value=2.0, step=0.1
+    )
+    sim_duration = st.sidebar.number_input(
+        "Total Sim Duration (s)", min_value=1.0, value=5.0, step=1.0
+    )
+
+    sim = Simulator(gains=gains, plant=plant, profile=None)
+    amplitude_rad = step_amplitude * RADIANS_PER_STEP
 
     def square_wave(t: float) -> float:
-        return 1.0 if (t % 2.0) < 1.0 else 0.0
+        return amplitude_rad if (t % wave_period) < (wave_period / 2.0) else 0.0
 
-    df = sim.run_signal(square_wave, 5.0, dt)
+    df = sim.run_signal(square_wave, duration=sim_duration, dt=dt)
+
+st.sidebar.markdown("---")
+st.sidebar.header("View Settings")
+
+lock_axes = st.sidebar.checkbox("Lock X-Axis Window")
+
+if lock_axes:
+    # Use columns to put Min and Max next to each other to save vertical space
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        x_min = st.number_input("X Min (s)", value=0.0, step=0.1)
+    with col2:
+        x_max = st.number_input("X Max (s)", value=2.0, step=0.1)
+else:
+    x_min, x_max = None, None
 
 print("Converting radians to steps for plotting")
 df["setpoint"] = df["setpoint"] / RADIANS_PER_STEP
@@ -70,5 +187,5 @@ df["actual"] = df["actual"] / RADIANS_PER_STEP
 df["error"] = df["error"] / RADIANS_PER_STEP
 
 st.title("Stepper Motor PID Tuner")
-fig = plot_interactive_dashboard(df)
+fig = plot_interactive_dashboard(df, x_min=x_min, x_max=x_max)
 st.plotly_chart(fig, width="stretch")
