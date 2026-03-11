@@ -187,5 +187,48 @@ df["actual"] = df["actual"] / RADIANS_PER_STEP
 df["error"] = df["error"] / RADIANS_PER_STEP
 
 st.title("Stepper Motor PID Tuner")
+initial_setpoint = df["setpoint"].iloc[0]
+final_setpoint = df["setpoint"].iloc[-1]
+step_size = final_setpoint - initial_setpoint
+
+if abs(step_size) > 1e-6:  # Prevent division by zero on static holds
+    if step_size > 0:
+        overshoot_val = max(0.0, df["actual"].max() - final_setpoint)
+    else:
+        overshoot_val = max(0.0, final_setpoint - df["actual"].min())
+
+    overshoot_pct = (overshoot_val / abs(step_size)) * 100.0
+else:
+    overshoot_val = df["error"].abs().max()
+    overshoot_pct = 0.0
+
+tail_length = max(1, int(len(df) * 0.05))
+sse_val = df["error"].iloc[-tail_length:].mean()
+
+tolerance = abs(step_size) * 0.02 if abs(step_size) > 1e-6 else 0.02
+unsettled_data = df[df["error"].abs() > tolerance]
+
+# If the data never left the tolerance band, or settled immediately
+if unsettled_data.empty:
+    settling_time = 0.0
+else:
+    settling_time = unsettled_data["time"].max()
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        label="Max Overshoot",
+        value=f"{overshoot_val:.4g}",
+        delta=f"{overshoot_pct:.1f}%",
+        delta_color="inverse",
+    )
+
+with col2:
+    st.metric(label="Steady-State Error", value=f"{sse_val:.4g}")
+
+with col3:
+    st.metric(label="Settling Time (2% Band)", value=f"{settling_time:.3f} s")
+
 fig = plot_interactive_dashboard(df, x_min=x_min, x_max=x_max)
 st.plotly_chart(fig, width="stretch")
